@@ -1,0 +1,1158 @@
+# Install required packages (run once)
+install.packages("garma")
+install.packages("forecast")
+install.packages("tseries")
+
+# Load libraries
+library(garma)
+library(forecast)
+library(tseries)
+
+###########################################################
+# Example 1: AirPassengers (built-in)   y=detrend(log(AirPassengers)) 
+# Load data Example 1: AirPassengers (built-in)
+
+data("AirPassengers")
+y <- AirPassengers
+plot(y, main = "AirPassengers")
+
+#y <- log(AirPassengers)   # stabilize variance
+#y <- diff(log(AirPassengers))   # stabilize variance
+#y <- diff(AirPassengers)
+
+# Plot
+
+#plot(y, main = "Log AirPassengers")
+#plot(y, main = "Diff Log AirPassengers")
+#plot(y, main = "Diff AirPassengers")
+
+
+# Remove deterministic seasonality
+fit_season <- tslm(y ~ trend + season)  #Louis suggested using y directly
+#fit_season <- tslm(y ~ season)
+y_detrend <- residuals(fit_season)
+
+# Periodogram
+spec.pgram(y, main = "Periodogram: AirPassengers")
+abline(v=1, col="red", lwd=2)
+
+spec.pgram(y_detrend, main = "Periodogram: detrend(AirPassengers)")  #x-axis 0-6.28
+spec.pgram(as.numeric(y_detrend), main = "Periodogram: detrend(AirPassengers)")  #x axis 0-0.5
+acf(y, lag.max=100, main = "ACF: AirPassengers")
+acf(y_detrend, lag.max=100, main = "ACF: detrend(AirPassengers)")
+
+
+# Fit GARMA (1 Gegenbauer factor)
+fit_garma <- garma(y_detrend, order = c(0,0,0), k = 1)
+fit_garma0 <- garma(y_detrend, order = c(2,0,1), k = 0)
+fit_garma2 <- garma(y_detrend, order = c(0,0,0), k = 2)
+
+
+summary(fit_garma)
+summary(fit_garma0)
+summary(fit_garma2)
+
+# Compare with ARIMA
+auto.arima(y_detrend)
+
+###########################################################
+
+> summary(fit_garma)
+
+Call:
+garma(x = y_detrend, order = c(0, 0, 0), k = 1)
+
+Mean term was fitted.
+No Drift (trend) term was fitted.
+
+Summary of Gegenbauer Time Series model.
+
+Fit using Whittle method, with Order=(0,0,0) k=1
+Optimisation Method(s):  cobyla, solnp
+
+Coefficients:
+      intercept        u1      fd1
+      2.368e-15  0.887003  0.50000
+s.e.  2.100e+00  0.007977  0.03287
+
+                        Factor1
+Gegenbauer frequency:    0.0764
+Gegenbauer Period:      13.0904
+Gegenbauer Exponent:     0.5000
+
+
+sigma^2 estimated as 38.7535: log likelihood = -1140.446963, aic = 2286.893926
+
+acos(0.887)/(2*pi)
+
+###############################################################
+
+> summary(fit_garma2)
+
+Call:
+garma(x = y_detrend, order = c(0, 0, 0), k = 2)
+
+Mean term was fitted.
+No Drift (trend) term was fitted.
+
+NOTE: Giraitis, Hidalgo & Robinson (2001) establish consistency and asymptotic Normality only for k=1 processes.
+      Whilst it seems likely that the results also hold for a general k factor process, we are unaware of specific papers
+      which establish this point. The user should be aware therefore that the estimate standard errors etc are provided
+      without the relevant theory being established.
+
+Summary of Gegenbauer Time Series model.
+
+Fit using Whittle method, with Order=(0,0,0) k=2
+Optimisation Method(s):  cobyla, solnp
+
+Coefficients:
+      intercept       u1      fd1       u2      fd2
+      2.368e-15  0.83948  0.48850  0.99905  0.11096
+s.e.  2.100e+00  0.01028  0.07736  0.01339  0.08196
+
+                        Factor1  Factor2
+Gegenbauer frequency:    0.0914   0.0069
+Gegenbauer Period:      10.9374 144.0000
+Gegenbauer Exponent:     0.4885   0.1110
+
+
+sigma^2 estimated as 34.8590: log likelihood = -1348.152078, aic = 2706.304156
+
+
+##############################################################
+
+> summary(fit_garma0)
+
+Call:
+garma(x = y_detrend, order = c(1, 0, 1), k = 0)
+
+Mean term was fitted.
+No Drift (trend) term was fitted.
+
+Summary of Gegenbauer Time Series model.
+
+Fit using Whittle method, with Order=(1,0,1) k=0
+Optimisation Method(s):  cobyla, solnp
+
+Coefficients:
+      intercept      ar1       ma1
+      2.368e-15  0.61990  -0.38969
+s.e.  2.100e+00  0.05855   0.06593
+
+
+sigma^2 estimated as 37.8014: log likelihood = -1515.496859, aic = 3036.993718
+
+> fit_garma <- garma(y_detrend, order = c(2,0,1), k = 0)
+> 
+> summary(fit_garma0)
+
+Call:
+garma(x = y_detrend, order = c(2, 0, 1), k = 0)
+
+Mean term was fitted.
+No Drift (trend) term was fitted.
+
+Summary of Gegenbauer Time Series model.
+
+Fit using Whittle method, with Order=(2,0,1) k=0
+Optimisation Method(s):  cobyla, solnp
+
+Coefficients:
+      intercept    ar1      ar2       ma1
+      2.368e-15  1.000  -0.3368  -0.01169
+s.e.  2.100e+00  0.161   0.1277   0.17103
+
+sigma^2 estimated as 36.6885: log likelihood = -1532.273947, aic = 3072.547893
+
+##############################################################
+# Example 2: Sunspot Data (cyclical long memory candidate)
+# Load built-in monthly sunspot data
+ 
+data("sunspot.month")
+y <- log(sunspot.month + 1)
+#plot(sunspot.month, main = "Sunspot Monthly")
+plot(y, main = "Log(Sunspot+1)")
+acf(y, lag.max=100, main = "Log(Sunspot+1)")
+
+# Remove mean
+y_center <- y - mean(y)
+
+# Periodogram (look for peak away from zero)
+spec.pgram(y_center, main = "Periodogram: log(Sunspots+1)")
+spec.pgram(as.numeric(y_center), main = "Periodogram: log(Sunspots+1)")
+spec.pgram(y, main = "Periodogram: log(Sunspots+1)")
+
+
+# Fit GARMA
+#fit_sun <- garma(y_center, order = c(0,0,0), k = 1)
+fit_sun <- garma(y, order = c(0,0,0), k = 1)
+
+summary(fit_sun)
+
+> summary(fit_sun)  #no centered
+
+Call:
+garma(x = y, order = c(0, 0, 0), k = 1)
+
+Mean term was fitted.
+No Drift (trend) term was fitted.
+
+Summary of Gegenbauer Time Series model.
+
+Fit using Whittle method, with Order=(0,0,0) k=1
+Optimisation Method(s):  cobyla, solnp
+
+Coefficients:
+      intercept         u1       fd1
+        3.47759  9.989e-01  0.362569
+s.e.    0.02106  5.046e-05  0.005071
+
+                        Factor1
+Gegenbauer frequency:    0.0076
+Gegenbauer Period:     132.3750
+Gegenbauer Exponent:     0.3626
+
+
+sigma^2 estimated as 0.0403: log likelihood = -22414.591975, aic = 44835.183949
+
+
+
+###############################################################
+# Example 3: Southern Oscillation Index (SOI)
+# Download SOI data
+
+#url <- "https://psl.noaa.gov/data/correlation/soi.data"
+#temp <- tempfile()
+#download.file(url, temp)
+
+setwd("D:/_C20201218/ResearchCollaborator/SheltonPeiris/GengenbaurLongMemorySurvey")
+
+#setwd(choose.dir())
+
+# Read file
+soi_raw <- read.table("SouthernOscillationIndex.txt")
+
+# Convert to time series
+soi_vec <- as.numeric(t(soi_raw[, -1]))
+soi_vec <- soi_vec[!is.na(soi_vec)]
+soi_ts <- ts(soi_vec, frequency = 12, start = c(1951,1))
+
+plot(soi_ts, main = "Southern Oscillation Index")
+acf(soi_ts, lag.max=100, main = "ACF: SOI")
+
+# Remove mean
+soi_center <- soi_ts - mean(soi_ts)
+
+# Periodogram
+spec.pgram(soi_center, main = "Periodogram: SOI")
+spec.pgram(as.numeric(soi_center), main = "Periodogram: SOI")
+
+# Fit GARMA
+#fit_soi <- garma(soi_center, order = c(0,0,0), k = 1)
+fit_soi <- garma(soi_ts, order = c(0,0,0), k = 1)
+
+summary(fit_soi)
+
+############################################################
+
+
+> soi_raw <- read.table("SouthernOscillationIndex.txt")
+> 
+> # Convert to time series
+> soi_vec <- as.numeric(t(soi_raw[, -1]))
+> soi_vec <- soi_vec[!is.na(soi_vec)]
+> 
+> soi_ts <- ts(soi_vec, frequency = 12, start = c(1951,1))
+> 
+> plot(soi_ts, main = "Southern Oscillation Index")
+> 
+> # Remove mean
+> soi_center <- soi_ts - mean(soi_ts)
+> 
+> # Periodogram
+> spec.pgram(soi_center, main = "Periodogram: SOI")
+> 
+> # Fit GARMA
+> fit_soi <- garma(soi_center, order = c(0,0,0), k = 1)
+> 
+> summary(fit_soi)
+
+Call:
+garma(x = soi_center, order = c(0, 0, 0), k = 1)
+
+Mean term was fitted.
+No Drift (trend) term was fitted.
+
+Summary of Gegenbauer Time Series model.
+
+Fit using Whittle method, with Order=(0,0,0) k=1
+Optimisation Method(s):  cobyla, solnp
+
+Coefficients:
+      intercept         u1      fd1
+        0.25311  0.9937679  0.24220
+s.e.    0.05148  0.0006286  0.01002
+
+
+                        Factor1
+Gegenbauer frequency:    0.0178
+Gegenbauer Period:      56.2500
+Gegenbauer Exponent:     0.2422
+
+
+sigma^2 estimated as 0.2120: log likelihood = -6191.156909, aic = 12388.313818
+
+########################################################
+# from chatgpt  not work
+
+install.packages("quantmod")
+library(quantmod)
+
+getSymbols("INDPRO", src = "FRED")
+y <- log(INDPRO)
+y_detrend <- diff(y)   # or HP filter
+
+
+url <- "https://psl.noaa.gov/gcos_wgsp/Timeseries/Data/nino34.long.data"
+nino <- read.table(url, skip=1)
+y <- as.numeric(as.matrix(nino[, -1]))
+y <- na.omit(y)
+
+#############################################################
+#############################################################
+# simulate k=1 factor GARMA data the best
+
+set.seed(123)   
+
+# Simulate Gegenbauer long-memory series
+
+gegenbauer_sim <- function(n = 1500, u = 0.7, d = 0.35, sigma = 1, M = 50) {
+   
+  # White noise
+  e <- rnorm(n + M, sd = sigma)
+  
+  # Compute Gegenbauer coefficients recursively
+  psi <- numeric(M)
+  psi[1] <- 1
+  psi[2] <- 2*u*d
+  
+  for (k in 3:M) {
+    psi[k] <- ((2*u*(k-2+d)*psi[k-1] -
+                (k-3+2*d)*psi[k-2]) / (k-1))
+  }
+  
+  # Apply filter (convolution)
+  y <- filter(e, filter = psi, method = "convolution", sides = 1)
+  
+  # Remove burn-in
+  y <- y[(M+1):(M+n)]
+  return(as.numeric(y))
+}
+
+y <- gegenbauer_sim(n = 1500, u = 0.7, d = 0.35)
+
+ts.plot(y, main = "Simulated Gegenbauer Process")
+
+#plot(sim, main = "simulation")
+acf(y, lag.max=100, main = "ACF: simulation")
+
+# Periodogram
+spec.pgram(y, main = "Periodogram: simulation")
+
+fit <- garma(y, order=c(0,0,0), k=1)
+fit2 <- garma(y, order=c(0,0,0), k=2)
+summary(fit)
+
+#######################################################
+
+> summary(fit)
+
+Call:
+garma(x = y, order = c(0, 0, 0), k = 1)
+
+Mean term was fitted.
+No Drift (trend) term was fitted.
+
+Summary of Gegenbauer Time Series model.
+
+Fit using Whittle method, with Order=(0,0,0) k=1
+Optimisation Method(s):  cobyla, solnp
+
+Coefficients:
+      intercept        u1      fd1
+        0.03259  0.693653  0.36064
+s.e.    0.03236  0.001632  0.01114
+
+                        Factor1
+Gegenbauer frequency:    0.1280
+Gegenbauer Period:       7.8125
+Gegenbauer Exponent:     0.3606
+
+
+sigma^2 estimated as 0.1557: log likelihood = -9607.533873, aic = 19221.067746
+
+#######################################################
+
+> summary(fit2)
+
+Call:
+garma(x = y, order = c(0, 0, 0), k = 2)
+
+Mean term was fitted.
+No Drift (trend) term was fitted.
+
+NOTE: Giraitis, Hidalgo & Robinson (2001) establish consistency and asymptotic Normality only for k=1 processes.
+      Whilst it seems likely that the results also hold for a general k factor process, we are unaware of specific papers
+      which establish this point. The user should be aware therefore that the estimate standard errors etc are provided
+      without the relevant theory being established.
+
+Summary of Gegenbauer Time Series model.
+
+Fit using Whittle method, with Order=(0,0,0) k=2
+Optimisation Method(s):  cobyla, solnp
+
+Coefficients:
+      intercept       u1      fd1       u2      fd2
+        0.03259  0.27622  0.01240  0.69666  0.33985
+s.e.    0.03236  0.06163  0.01519  0.00173  0.01202
+
+                        Factor1  Factor2
+Gegenbauer frequency:    0.2055   0.1273
+Gegenbauer Period:       4.8672   7.8534
+Gegenbauer Exponent:     0.0124   0.3398
+
+
+sigma^2 estimated as 0.1556: log likelihood = -9422.455254, aic = 18854.910508
+
+
+#######################################################
+#######################################################
+# 
+# k=2 GARMA model simulation best
+
+
+gegenbauer_sim_k2 <- function(n = 1500,
+                             u = c(0.7, 0.3),
+                             d = c(0.35, 0.25),
+                             sigma = 1,
+                             M = 100) {
+  
+  # Function to compute psi coefficients for one factor
+  compute_psi <- function(u, d, M) {
+    psi <- numeric(M)
+    psi[1] <- 1
+    psi[2] <- 2 * u * d
+    
+    for (k in 3:M) {
+      psi[k] <- (2 * u * (k - 2 + d) * psi[k - 1] -
+                 (k - 3 + 2 * d) * psi[k - 2]) / (k - 1)
+    }
+    return(psi)
+  }
+  
+  # Compute psi for both factors
+  psi1 <- compute_psi(u[1], d[1], M)
+  psi2 <- compute_psi(u[2], d[2], M)
+  
+  # Convolution of filters
+  psi_total <- convolve(psi1, rev(psi2), type = "open")
+  
+  # Truncate to M (important for stability)
+  psi_total <- psi_total[1:M]
+  
+  # White noise
+  e <- rnorm(n + M, sd = sigma)
+  
+  # Apply filter
+  y <- filter(e, filter = psi_total, method = "convolution", sides = 1)
+  
+  # Remove burn-in
+  y <- y[(M + 1):(M + n)]
+  
+  return(as.numeric(y))
+}
+
+# Example
+set.seed(123)
+
+y <- gegenbauer_sim_k2(n = 2000, u = c(0.2, 0.7), d = c(0.4, 0.3), M = 200)
+#y <- arima.sim(model = list(ar = 0.5), n = n, innov = y)  #add arma
+
+# Plot
+ts.plot(y, main = "Simulation: GARMA k=2")
+
+#plot(sim, main = "simulation")
+acf(y, lag.max=100, main = "ACF: simulation k=2")
+
+# Periodogram
+spec.pgram(y, main = "Periodogram: simulation k=2")
+
+fit1 <- garma(y, order=c(0,0,0), k=1)
+fit2 <- garma(y, order=c(0,0,0), k=2)
+summary(fit1)
+summary(fit2)
+
+#######################################################
+
+> summary(fit2)
+
+Call:
+garma(x = y, order = c(0, 0, 0), k = 2)
+
+Mean term was fitted.
+No Drift (trend) term was fitted.
+
+NOTE: Giraitis, Hidalgo & Robinson (2001) establish consistency and asymptotic Normality only for k=1 processes.
+      Whilst it seems likely that the results also hold for a general k factor process, we are unaware of specific papers
+      which establish this point. The user should be aware therefore that the estimate standard errors etc are provided
+      without the relevant theory being established.
+
+Summary of Gegenbauer Time Series model.
+
+Fit using Whittle method, with Order=(0,0,0) k=2
+Optimisation Method(s):  cobyla, solnp
+
+Coefficients:
+      intercept         u1      fd1        u2      fd2
+        0.01860  0.6955549  0.48922  0.190466  0.46295
+s.e.    0.03468  0.0008781  0.00985  0.001303  0.01274
+
+                        Factor1  Factor2
+Gegenbauer frequency:    0.1276   0.2195
+Gegenbauer Period:       7.8383   4.5558
+Gegenbauer Exponent:     0.4892   0.4630
+
+
+sigma^2 estimated as 0.1762: log likelihood = -16151.481752, aic = 32312.963505
+
+
+
+#######################################################
+# 
+# k=2 GARMA model simulation not work
+
+gegenbauer_2factor_sim <- function(n = 1500,
+                                   u = c(0.3, 0.7),   # frequencies
+                                   d = c(0.2, 0.3),   # memory parameters
+                                   sigma = 1) {
+  
+  # Frequencies
+  j <- 0:(n - 1)
+  lambda <- 2 * pi * j / n
+  
+  # Initialize spectral density
+  f_lambda <- rep(1, n)
+  
+  # Multiply Gegenbauer factors
+  for (k in 1:2) {
+    f_lambda <- f_lambda * abs(2 * (cos(lambda) - cos(2 * pi * u[k])))^(-2 * d[k])
+  }
+  
+  # Scale
+  f_lambda <- sigma^2 * f_lambda
+  
+  # Generate complex Gaussian noise
+  Z_real <- rnorm(n)
+  Z_imag <- rnorm(n)
+  Z <- complex(real = Z_real, imaginary = Z_imag)
+  
+  # Apply spectral shaping
+  X_freq <- sqrt(f_lambda) * Z
+  
+  # Inverse FFT to get time series
+  x <- Re(fft(X_freq, inverse = TRUE)) / sqrt(n)
+  
+  return(x)
+}
+
+# Example usage
+set.seed(123)
+
+y <- gegenbauer_2factor_sim(n = 1500,u = c(0.2, 0.6),d = c(0.25, 0.15),sigma = 1)
+#y <- arima.sim(model = list(ar = 0.5), n = n, innov = y)  #add arma
+
+# Plot
+ts.plot(y, main = "Simulated 2-Factor GARMA Time Series")
+
+#plot(sim, main = "simulation")
+acf(y, lag.max=100, main = "ACF: simulation")
+
+# Periodogram
+spec.pgram(y, main = "Periodogram: simulation")
+
+#fit <- garma(y, order=c(0,0,0), k=1)
+fit2 <- garma(y, order=c(0,0,0), k=2)
+summary(fit2)
+
+
+#######################################################  not work
+
+gegenbauer_sim_spec <- function(n = 800, u = 0.7, d = 0.35, sigma = 1) {
+  
+  # Fourier frequencies
+  j <- 0:(n-1)
+  lambda <- 2*pi*j/n
+  
+  # Spectral density of Gegenbauer process
+  f <- (1 - 2*u*cos(lambda) + 1)^(-2*d)
+  
+  # Random complex numbers
+  z_real <- rnorm(n)
+  z_imag <- rnorm(n)
+  z <- complex(real = z_real, imaginary = z_imag)
+  
+  # Impose spectrum
+  y_fft <- sqrt(f) * z
+  
+  # Inverse FFT
+  y <- Re(fft(y_fft, inverse = TRUE)) / sqrt(n)
+  
+  # Scale variance
+  y <- sigma * scale(y)
+  
+  return(as.numeric(y))
+}
+
+set.seed(123)
+
+y <- gegenbauer_sim_spec(n = 1500, u = 0.7, d = 0.35, sigma=1)
+
+ts.plot(y, main = "Simulation")
+acf(y, lag.max=100, main = "ACF: simulation")
+
+# Periodogram
+spec.pgram(y, main = "Periodogram: simulation")
+
+fit <- garma(y, order = c(0,0,0), k = 1)
+summary(fit)
+
+
+################################################ not work
+
+gegenbauer_sim_td <- function(n = 2000, u = 0.7, d = 0.35, sigma = 1, K = 200) {
+  
+  # Gegenbauer coefficients (recursive approximation)
+  psi <- numeric(K)
+  psi[1] <- 1
+  
+  for (k in 2:K) {
+    psi[k] <- ((2*(k-1)*u)*psi[k-1] - (k-2)*psi[k-2]) / k
+  }
+  
+  # Apply fractional exponent d
+  weights <- psi^(d)
+  
+  # Generate white noise
+  eps <- rnorm(n + K, sd = sigma)
+  
+  # Filter
+  y <- rep(0, n)
+  for (t in 1:n) {
+    y[t] <- sum(weights * eps[(t+K-1):(t)])
+  }
+  
+  return(scale(y))
+}
+
+set.seed(123)
+
+y <- gegenbauer_sim_spec(n = 800, u = 0.7, d = 0.45, sigma=1)
+
+ts.plot(y, main = "Simulation")
+acf(y, lag.max=100, main = "ACF: simulation")
+
+# Periodogram
+spec.pgram(y, main = "Periodogram: simulation")
+
+fit <- garma(y, order = c(0,0,0), k = 1)
+summary(fit)
+
+################################################  not work
+
+gegenbauer_sim_spec <- function(n = 1500, u = 0.7, d = 0.35, sigma = 1, taper = TRUE) {
+  
+  # Fourier frequencies (0 to 2π)
+  j <- 0:(n-1)
+  lambda <- 2*pi*j/n
+  
+  # Correct Gegenbauer spectral density
+  f <- (1 - 2*u*cos(lambda) + u^2)^(-2*d)
+  
+  # Avoid numerical explosion at the pole
+  f[!is.finite(f)] <- max(f[is.finite(f)])
+  
+  # Optional taper to reduce leakage
+  if (taper) {
+    taper_window <- 0.5 * (1 - cos(2*pi*(1:n)/n))  # cosine bell
+  } else {
+    taper_window <- rep(1, n)
+  }
+  
+  # Generate complex Gaussian noise (Hermitian symmetry enforced)
+  z_real <- rnorm(n)
+  z_imag <- rnorm(n)
+  z <- complex(real = z_real, imaginary = z_imag)
+  
+  # Impose spectrum
+  y_fft <- sqrt(f) * z
+  
+  # Inverse FFT
+  y <- Re(fft(y_fft, inverse = TRUE)) / sqrt(n)
+  
+  # Apply taper in time domain (optional)
+  y <- y * taper_window
+  
+  # Standardise variance
+  y <- sigma * scale(y)
+  
+  return(as.numeric(y))
+}
+
+set.seed(123)
+
+y <- gegenbauer_sim_spec(n = 800, u = 0.7, d = 0.45, sigma=1)
+
+ts.plot(y, main = "Simulation")
+acf(y, lag.max=100, main = "ACF: simulation")
+
+# Periodogram
+spec.pgram(y, main = "Periodogram: simulation")
+
+fit <- garma(y, order = c(0,0,0), k = 1)
+summary(fit)
+
+
+
+
+########################################################
+# from Simon Gu
+# Include all the R code from the three versions here
+# Include library ( stats ), library ( garma )
+# Include seed , n, sigma , u_true , d_true , M
+# Include simulation functions , plotting , and Whittle fitting
+# ###########################
+# Comparison of Gegenbauer Simulation Methods
+# Version 1 (FFT - based ), Version 2 (Time - domain filter ), Version 3 (
+Improved ),Version 4 ( Direct Spectral Density Fit )
+# ###########################
+
+library(stats)
+library(garma)
+set.seed (123)
+# --- Common settings ---
+n <- 1500 # large n for accurate Whittle fitting
+sigma <- 1
+u_true <- 0.7 # peak frequency parameter
+d_true <- 0.35 # long - memory exponent
+M <- 50 # filter length for time - domain methods
+
+# ###########################
+# Version 1: FFT - based ( Spectral Domain )
+# - Fast
+# - Works naturally for freq = 0 (1st - order filter )
+# - Peak at zero frequency only
+# - Approximate spectral shape for non - zero frequency peaks
+# ###########################
+
+gegenbauer_sim_fft <- function (n, u, d, sigma) 
+{
+# 1. Fourier frequencies
+j <- 0:(n -1)
+lambda <- 2*pi*j/n
+
+# 2. Spectral density (1st - order approximation )
+f <- (1 - 2*u*cos( lambda ) + u^2)^(-2*d)
+
+# 3. Random complex numbers
+z <- complex (real = rnorm (n), imaginary = rnorm (n))
+
+# 4. Impose spectrum
+y_fft <- sqrt(f)*z
+
+# 5. Inverse FFT to time domain
+y <- Re(fft(y_fft, inverse = TRUE)) / sqrt(n)
+
+# 6. Scale
+y <- sigma*as.numeric(scale(y))
+return (y)
+} 
+
+y_fft <- gegenbauer_sim_fft(n, u_true, d_true, sigma)
+
+# --- Plots ---
+par(mfrow =c(2 ,2))
+ts.plot(y_fft, main ="V1 FFT-based: Time Series")
+acf(y_fft, lag.max =100, main ="V1: ACF")
+spec.pgram(y_fft, main ="V1: Periodogram")
+
+# --- Fit ---
+fit_fft <- garma (y_fft, order=c(0 ,0 ,0), k=1)
+summary(fit_fft)
+
+# Interpretation :
+# - u corresponds roughly to damping at zero frequency
+# - fast , simple , but cannot place spectral peak away from 0 accurately
+n = 2000
+Call :
+garma (x = y_fft , order = c(0, 0, 0) , k = 1)
+Mean term was fitted .
+No Drift ( trend ) term was fitted .
+Summary of Gegenbauer Time Series model .
+Fit using Whittle method , with Order =(0 ,0 ,0) k=1
+Optimisation Method (s): cobyla , solnp
+Coefficients :
+     intercept        u1      fd1
+    -1.241e-17 0.9798550 0.226136
+s.e. 2.236e-02 0.0005414 0.006913
+Factor1
+Gegenbauer frequency : 0.0320
+Gegenbauer Period : 31.2500
+Gegenbauer Exponent : 0.2261
+sigma ^2 estimated as 0.1170: log likelihood = -11577.004913 , aic =
+23160.009825
+
+# ###########################
+# Version 2: Time - domain filter
+# - Computes Gegenbauer coefficients recursively
+# - Convolves with white noise
+# - Can simulate true non - zero frequency peak
+# - More accurate for cyclical long - memory
+# ###########################
+
+gegenbauer_sim_filter <- function(n, u, d, sigma, M =50) 
+{
+# 1. White noise with burn-in
+e <- rnorm(n + M, sd = sigma)
+
+# 2. Recursive coefficients
+psi <- numeric(M)
+psi[1] <- 1
+psi[2] <- 2*u*d
+if (M > 2) {
+for (k in 3:M) {
+psi[k] <- (2*u*(k-2+d)*psi[k-1] - (k-3+2*d)*psi[k-2])/(k-1)
+               }
+           } 
+
+# 3. Filter via convolution
+y <- stats::filter(e, filter=psi, method="convolution", sides =1)
+
+# 4. Remove burn -in and scale
+y <- y[(M+1):(M+n)]
+y <- as.numeric(scale(y))
+return(y)
+} 
+
+y_filter <- gegenbauer_sim_filter(n, u_true, d_true, sigma, M)
+
+# --- Plots ---
+ts.plot(y_filter, main ="Filter-based Simulation")
+acf(y_filter, lag.max =100, main ="ACF: simulation")
+spec.pgram(y_filter, main ="Periodogram: simulation")
+
+# --- Fit ---
+fit_filter <- garma(y_filter, order=c(0 ,0 ,0), k=1)
+summary(fit_filter )
+
+# Interpretation :
+# - u corresponds to cos( peak frequency ) (ω0 = arccos(u))
+# - Peak can be away from zero frequency
+# - More realistic for Gegenbauer cyclical long - memory
+# - Time - domain convolution slower than FFT , but flexible
+
+Call :
+garma (x = y_filter , order = c(0, 0, 0) , k = 1)
+Mean term was fitted .
+No Drift ( trend ) term was fitted .
+Summary of Gegenbauer Time Series model .
+Fit using Whittle method , with Order =(0 ,0 ,0) k=1
+Optimisation Method (s): cobyla , solnp
+Coefficients :
+intercept u1 fd1
+-1.490e -17 0.686834 0.356440
+s.e. 2.236e -02 0.001249 0.009652
+5Factor1
+Gegenbauer frequency : 0.1295
+Gegenbauer Period : 7.7220
+Gegenbauer Exponent : 0.3564
+sigma ^2 estimated as 0.1026: log likelihood = -12342.684681 , aic =
+24691.369363
+
+# ###########################
+# Version 3: Improved / Simplified
+# - Combines filter - based approach
+# - Minimal code , supports large n, scales output
+# - Accurate peak placement
+# ###########################
+gegenbauer _sim_v3 <- function (n, u, d, sigma =1, M =50) {
+e <- rnorm (n + M, sd = sigma )
+psi <- numeric (M)
+psi [1] <- 1
+psi [2] <- 2*u*d
+if (M > 2) {
+for (k in 3:M) {
+psi[k] <- (2*u*(k -2+d)*psi[k -1] - (k -3+2 *d)* psi[k -2]) /(k -1)
+}
+} y
+<- stats :: filter (e, filter =psi , method =" convolution ", sides =1)
+y <- y[(M+1) :(M+n)]
+y <- as. numeric ( scale (y))
+return (y)
+} y
+_ enhanced <- gegenbauer _sim_v3(n, u_true , d_true , sigma , M)
+# --- Plots ---
+ts. plot (y_ enhanced , main ="V3 Improved : Time Series ")
+acf (y_ enhanced , lag . max =100 , main ="V3: ACF ")
+spec . pgram (y_ enhanced , main ="V3: Periodogram ")
+# --- Fit ---
+fit _ enhanced <- garma (y_ enhanced , order =c(0 ,0 ,0) , k=1)
+summary (fit _ enhanced )
+# Interpretation :
+# - u = cos( peak frequency )
+# - d = long - memory exponent
+# - Most sophisticated : captures non - zero frequency peak accurately
+# - Estimated values very close to true u/d with large n
+Call :
+garma (x = y_v3 , order = c(0, 0, 0) , k = 1)
+Mean term was fitted .
+No Drift ( trend ) term was fitted .
+Summary of Gegenbauer Time Series model .
+Fit using Whittle method , with Order =(0 ,0 ,0) k=1
+Optimisation Method (s): cobyla , solnp
+6Coefficients :
+intercept u1 fd1
+0.00000 0.709325 0.319422
+s.e. 0.02236 0.001352 0.009484
+Factor1
+Gegenbauer frequency : 0.1245
+Gegenbauer Period : 8.0321
+Gegenbauer Exponent : 0.3194
+sigma ^2 estimated as 0.1043: log likelihood = -11822.407654 , aic =
+23650.815309
+# ###########################
+# Version 4: Direct Spectral ( True Gegenbauer )
+# - Uses f( lambda ) = |2( cos( lambda ) - u)|^{ -2d}
+# - Accurate non - zero frequency peak
+# - Fast using FFT
+# ###########################
+gegenbauer _sim_v4 <- function (n, u, d, sigma =1, epsilon =1e -8) {
+# 1. Fourier frequencies
+j <- 0:(n -1)
+lambda <- 2*pi*j/n
+# 2. True Gegenbauer spectral density
+f <- (abs (2 * (cos( lambda ) - u)) + epsilon )^( -2*d) # add small
+epsilon to avoid division by zero
+# 3. White noise in complex plane
+z <- complex ( real = rnorm (n), imaginary = rnorm (n))
+# 4. Apply filter in frequency domain
+y_fft <- sqrt (f) * z
+# 5. Inverse FFT to time domain
+y <- Re(fft(y_fft , inverse = TRUE )) / sqrt (n)
+# 6. Scale
+y <- sigma * as. numeric ( scale (y))
+return (y)
+} y
+_dir _ spec <- gegenbauer _sim_v4(n, u_true , d_true , sigma )
+# --- Plots ---
+par ( mfrow =c(2 ,2))
+ts. plot (y_dir _spec , main ="V4 True Spectral : Time Series ")
+acf (y_dir _spec , lag .max =100 , main ="V4: ACF ")
+spec . pgram (y_dir _spec , main ="V4: Periodogram ")
+# --- Fit using Whittle ---
+library ( garma )
+fit _dir _ spec <- garma (y_dir_spec , order =c(0 ,0 ,0) , k=1)
+summary (fit _dir _ spec )
+7Call :
+garma (x = y_dir_spec , order = c(0, 0, 0) , k = 1)
+Mean term was fitted .
+No Drift ( trend ) term was fitted .
+Summary of Gegenbauer Time Series model .
+Fit using Whittle method , with Order =(0 ,0 ,0) k=1
+Optimisation Method (s): cobyla , solnp
+Coefficients :
+intercept u1 fd1
+0.00000 0.709325 0.319422
+s.e. 0.02236 0.001352 0.009484
+Factor1
+Gegenbauer frequency : 0.1245
+Gegenbauer Period : 8.0321
+Gegenbauer Exponent : 0.3194
+sigma ^2 estimated as 0.0864: log likelihood = -12675.110461 , aic =
+25356.220922
+# ###########################
+# Notes / Comparison Summary
+# ###########################
+# V1 FFT - based :
+# - Fast , simple
+# - Peak only at zero frequency
+# - Approximate if true process has non - zero frequency peak
+# V2 Filter - based :
+# - Time -domain , recursive coefficients
+# - Can simulate true Gegenbauer process with peak away from zero
+# - Slower than FFT , but flexible
+# V3 Improved :
+# - Clean , minimal , scalable
+# - Accurate non - zero frequency peak
+# - Estimates of u (ω0 = arccos(u)) and d close to true values
+# Version 4: Direct Spectral ( True Gegenbauer )
+# - Uses f( lambda ) = |2( cos( lambda ) - u)|^{ -2d}
+# - Accurate non - zero frequency peak
+# - Fast using FFT
+
+
+
+
+
+
+
+n=1500
+u_true=0.7
+d_true=0.35
+sigma=1
+M=50
+
+
+gegenbauer_sim_filter <- function (n, u, d, sigma , M =50) {
+# 1. White noise with burn -in
+e <- rnorm (n + M, sd = sigma )
+# 2. Recursive coefficients
+psi <- numeric (M)
+psi [1] <- 1
+psi [2] <- 2*u*d
+if (M > 2) {
+for (k in 3:M) {
+psi[k] <- (2*u*(k -2+d)*psi[k -1] - (k -3+2 *d)* psi[k -2]) /(k -1)
+               }
+           } 
+# 3. Filter via convolution
+y <- stats :: filter (e, filter =psi , method =" convolution ", sides =1)
+# 4. Remove burn -in and scale
+y <- y[(M+1) :(M+n)]
+y <- as. numeric ( scale (y))
+return (y)
+} 
+y <- gegenbauer_sim_filter (n, u_true , d_true , sigma , M)
+
+ts.plot(y, main = "Simulation")
+acf(y, lag.max=100, main = "ACF: simulation")
+
+# Periodogram
+spec.pgram(y, main = "Periodogram: simulation")
+
+fit <- garma(y, order = c(0,0,0), k = 1)
+summary(fit)
+
+#####################################################
+
+# Install if needed
+install.packages("quantmod")
+
+# Load package
+library(quantmod)
+
+# Download S&P 500 (^GSPC)
+getSymbols("^GSPC", 
+           src = "yahoo", 
+           from = "2016-01-01",
+           auto.assign = TRUE)
+
+# View data
+head(GSPC)
+
+# Extract adjusted close
+sp500 <- Ad(GSPC)
+high <- as.numeric(Hi(GSPC)) 
+low  <- as.numeric(Lo(GSPC))
+
+#parkinson_vol <- function(high, low) {
+#n0 <- length(high)
+vol0 <- (1 / (4 * log(2))) * (log(high / low))^2
+#  sigma <- sqrt(sigma2)
+#  return(sigma)
+#}
+vol0[1:5]
+
+vol=vol0[-1]
+vol[1:5]
+
+# Plot
+plot(sp500, main = "S&P 500 (Adjusted Close)")
+n0=length(sp500)
+n=n0-1; n
+
+returns <- diff(log(sp500))
+returns <- na.omit(returns)
+
+plot(returns, main = "S&P 500 Log Returns")
+plot(vol, type="l", main = "S&P 500 PK variance")
+
+# Simulate some volatility data
+#set.seed(123)
+#n <- 1000
+#RV <- abs(rnorm(n))
+
+# Construct HAR components
+RV_d <- RV[-(1:22)]
+RV_w <- sapply(23:n, function(i) mean(RV[(i-5):(i-1)]))
+RV_m <- sapply(23:n, function(i) mean(RV[(i-22):(i-1)]))
+
+# Response
+Y <- RV[23:n]
+
+# Fit HAR model
+har_model <- lm(Y ~ RV_d + RV_w + RV_m)
+
+summary(har_model)
+
+###########################################
+
+# Install packages if needed
+#install.packages("zoo")
+
+library(quantmod)
+library(zoo)
+
+# 1. Download S&P 500 data
+getSymbols("^GSPC", from = "2015-01-01", src = "yahoo")
+
+# 2. Extract High and Low prices
+high <- as.numeric(Hi(GSPC))
+low  <- as.numeric(Lo(GSPC))
+
+# 3. Compute daily Parkinson volatility (variance form)
+pk_var <- (1 / (4 * log(2))) * (log(high / low))^2
+
+# Convert to volatility (optional)
+pk_vol <- sqrt(pk_var)
+
+# 4. Build HAR components
+# Daily
+RV_d <- pk_vol
+
+# Weekly (5-day average)
+RV_w <- rollapply(RV_d, width = 5, mean, align = "right", fill = NA)
+
+# Monthly (22-day average)
+RV_m <- rollapply(RV_d, width = 22, mean, align = "right", fill = NA)
+
+# 5. Align data (lagged predictors)
+#data <- na.omit(merge(
+#  RV = RV_d,
+  RV_d_lag = lag(RV_d, 1)
+  RV_w_lag = lag(RV_w, 1)
+  RV_m_lag = lag(RV_m, 1)
+#))
+
+# 6. Fit HAR model
+har_model <- lm(RV_d ~ RV_d_lag + RV_w_lag + RV_m_lag)
+
+# 7. Summary
+summary(har_model)
+
+# 8. Plot fitted vs actual
+plot(RV_d, type="l", main = "PK Volatility vs HAR Fitted")
+lines(fitted(har_model), col = "red")
+legend("topright", legend = c("Actual", "Fitted"), col = c("black", "red"), lty = 1)
+
+acf(residuals(har_model))
+plot(residuals(har_model), main = "HAR Residuals")plot(residuals(har_model), main = "HAR Residuals")
